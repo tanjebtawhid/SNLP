@@ -1,4 +1,7 @@
 import re
+import pickle
+import os
+
 from assignment_1.corpus_reader import CorpusReader
 
 
@@ -9,11 +12,14 @@ class TigerCorpusReader(CorpusReader):
 
     corpus -- [ [(token_1, pos_1)...(token_n, pos_n)], ... [(token_1, pos_1)...(token_n, pos_n)] ]
     """
-    def __init__(self):
+    def __init__(self, corpus=None):
         """
         Initialize with an empty corpus
         """
-        self.corpus = []
+        if corpus is None:
+            self.corpus = []
+        else:
+            self.corpus = corpus
 
     def read(self, file_path):
         """
@@ -55,8 +61,13 @@ class TigerCorpusReader(CorpusReader):
         #     yield self.corpus[idx]
         return self.corpus[i:j]
 
-    def to_file(self):
-        raise NotImplementedError
+    def to_file(self, directory, fname):
+        """
+        Writes read corpus into file
 
-    def to_string(self):
-        raise NotImplementedError
+        Parameters:
+            directory  --  string
+            fname      --  string, file name
+        """
+        with open(os.path.join(directory, fname), 'wb') as fh:
+            pickle.dump(self.corpus, fh)

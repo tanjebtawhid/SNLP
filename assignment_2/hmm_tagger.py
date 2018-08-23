@@ -1,5 +1,5 @@
-from assignment_2.pos_tagger import POSTagger
 import numpy as np
+from assignment_2.pos_tagger import POSTagger
 
 
 class HMMTagger(POSTagger):
@@ -7,16 +7,13 @@ class HMMTagger(POSTagger):
         self.state_transition_counts = {}  # dictionary of dictionaries
         self.state_emission_counts = {}  # dictionary of dictionaries
 
-        self.state_transition_total = {}
-        self.state_emission_total = {}
-
         self.state_transitions = {}  # dictionary of dictionaries
         self.state_emissions = {}  # dictionary of dictionaries
 
-        self.pos_index = {}
-        self.inv_pos_index = {}
+        self.pos_index = {}  # pos tag to int mapping
+        self.inv_pos_index = {}  # int to pos tag mapping
 
-        self.token_freq = {}
+        self.token_freq = {}  # count for each token
 
     def train(self, sentences):
         """
@@ -55,18 +52,18 @@ class HMMTagger(POSTagger):
     def compute_model(self):
         """
         Computes state transition and emission probabilities Applies add one smoothing for
-        emission probabilities to deal with unseen tokens during training. Cretes po to index
+        emission probabilities to deal with unseen tokens during training. Creates pos to index
         and index to pas mapping.
         """
         for prev_tag in self.state_transition_counts:
             self.state_transitions[prev_tag] = {}
-            total = self.state_transition_total[prev_tag]
+            total = sum(self.state_transition_counts[prev_tag].values())
             for tag in self.state_transition_counts[prev_tag]:
                 self.state_transitions[prev_tag][tag] = self.state_transition_counts[prev_tag][tag] / total
 
         for tag in self.state_emission_counts:
             self.state_emissions[tag] = {}
-            total = self.state_emission_total[tag]
+            total = sum(self.state_emission_counts[tag].values())
             for token in self.state_emission_counts[tag]:
                 self.state_emissions[tag][token] = \
                     (self.state_emission_counts[tag][token] + 1) / (total + len(self.token_freq) + 1)
@@ -87,18 +84,23 @@ class HMMTagger(POSTagger):
         Parameters:
             sentence  --  list of tuples [ (token, tag) ... (token, tag) ]
         """
-        for i in range(len(sentence)):
-            token = sentence[i][0]
-            if i == 0:
-                prev_tag = '<pos>'
-            else:
+        for i in range(len(sentence) + 1):
+            if i == len(sentence):
+                token = '<eos>'
                 prev_tag = sentence[i - 1][1]
-
-            tag = sentence[i][1]
+                tag = '<end>'
+            else:
+                token = sentence[i][0]
+                if i == 0:
+                    prev_tag = '<pos>'
+                else:
+                    prev_tag = sentence[i - 1][1]
+                tag = sentence[i][1]
 
             self.update_state_transitions(prev_tag, tag)
             self.update_emissions(tag, token)
-            self.update_token_freq(token)
+            if token != '<eos>':
+                self.update_token_freq(token)
 
     def update_token_freq(self, token):
         """
@@ -129,12 +131,14 @@ class HMMTagger(POSTagger):
             self.state_emission_counts[tag] = {}
             self.state_emission_counts[tag][token] = 1
 
-        if tag in self.state_emission_total:
-            self.state_emission_total[tag] += 1
-        else:
-            self.state_emission_total[tag] = 1
-
     def update_state_transitions(self, prev_tag, tag):
+        """
+        Updates transition probabiltry from prev_tag to tag
+
+        Parameters:
+            prev_tag    --  string, pos
+            tag         --  string, pos
+        """
         if prev_tag in self.state_transition_counts:
             if tag in self.state_transition_counts[prev_tag]:
                 self.state_transition_counts[prev_tag][tag] += 1
@@ -143,11 +147,6 @@ class HMMTagger(POSTagger):
         else:
             self.state_transition_counts[prev_tag] = {}
             self.state_transition_counts[prev_tag][tag] = 1
-
-        if prev_tag in self.state_transition_total:
-            self.state_transition_total[prev_tag] += 1
-        else:
-            self.state_transition_total[prev_tag] = 1
 
     def predict(self, sentence):
         """
@@ -158,10 +157,12 @@ class HMMTagger(POSTagger):
         Returns:
             Most likely tag sequence for the sentence
         """
-        return self.viterbi(sentence)
+        tagged_sentence, _ = self.viterbi(sentence)
+        return tagged_sentence
 
     def viterbi(self, sentence):
         """
+        TODO: reimplement backtracking
         A sentence is a list of tuples. Here our goal is to infer the most likely tag sequence
         for the given sentence, therefore, input sentence will be just list of tokens
 
@@ -173,19 +174,20 @@ class HMMTagger(POSTagger):
         delta = np.zeros(shape=(len(self.state_transitions), len(sentence)), dtype=float)
         tagged_sentence = []
 
-        for next_tag in self.state_transitions['<pos>']:
-            if next_tag in self.state_transitions['<pos>']:
-                a = self.a('<pos>', next_tag)
-            else:
-                a = 0.
+        for next_tag in self.state_transitions:
+            if next_tag != '<pos>':
+                if next_tag in self.state_transitions['<pos>']:
+                    a = self.a('<pos>', next_tag)
+                else:
+                    a = 0.
 
-            if sentence[0] not in self.state_emissions[next_tag]:
-                b = self.b(next_tag, 'unkwn')
-            else:
-                b = self.b(next_tag, sentence[0])
+                if sentence[0] not in self.state_emissions[next_tag]:
+                    b = self.b(next_tag, 'unkwn')
+                else:
+                    b = self.b(next_tag, sentence[0])
 
-            idx = self.pos_index[next_tag]
-            delta[idx, 0] = a * b
+                idx = self.pos_index[next_tag]
+                delta[idx, 0] = a * b
 
         ml_tag = self.inv_pos_index[np.argmax(delta[:, 0])]  # holds most likely tag at the specific time step
         tagged_sentence.append((sentence[0], ml_tag))
@@ -199,7 +201,7 @@ class HMMTagger(POSTagger):
                     else:
                         b = self.b(next_tag, sentence[j])
 
-                    for tag in self.state_transitions[next_tag]:
+                    for tag in self.state_transitions:
                         if next_tag in self.state_transitions[tag]:
                             a = self.a(tag, next_tag)
                         else:
@@ -212,32 +214,7 @@ class HMMTagger(POSTagger):
             ml_tag = self.inv_pos_index[np.argmax(delta[:, j])]
             tagged_sentence.append((sentence[j], ml_tag))
 
-        return tagged_sentence
-
-    def print_array(self, delta, i):
-        """
-        Parameters:
-            delta  --  2D array of float
-            i      --  integer
-        """
-        print('{}: '.format(i))
-        for k in range(delta.shape[1]):
-            if delta[i, k] > np.NINF:
-                print('{:s}:{:f} '.format(self.inv_pos_index[k], delta[i, k]))
-        print()
-
-    def delta(self, s, j, delta):
-        """
-        Parameters:
-            s      --  string
-            i      --  integer
-            delta  --  dictionary of dictionaries { int: {string: float} ...}
-        Returns:
-        """
-        if j in delta:
-            if s in delta[j]:
-                return float(delta[s])
-        return 0.
+        return tagged_sentence, delta
 
     def b(self, tag, token):
         """
@@ -289,3 +266,28 @@ class HMMTagger(POSTagger):
             string += '\n'
 
         return string
+
+    def print_array(self, delta, i):
+        """
+        Parameters:
+            delta  --  2D array of float
+            i      --  integer
+        """
+        print('{}: '.format(i))
+        for k in range(delta.shape[1]):
+            if delta[i, k] > np.NINF:
+                print('{:s}:{:f} '.format(self.inv_pos_index[k], delta[i, k]))
+        print()
+
+    def delta(self, s, j, delta):
+        """
+        Parameters:
+            s      --  string
+            i      --  integer
+            delta  --  dictionary of dictionaries { int: {string: float} ...}
+        Returns:
+        """
+        if j in delta:
+            if s in delta[j]:
+                return float(delta[s])
+        return 0.

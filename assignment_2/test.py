@@ -1,8 +1,8 @@
+import os
+import time
 from assignment_1.tiger_corpus_reader import TigerCorpusReader
 from assignment_2.hmm_tagger import HMMTagger
 from assignment_2.tagger_evaluator import TaggerEvaluator
-import os
-import time
 
 
 DATA_DIR = 'C:\\Users\\ttanj\\PycharmProjects\\SNLP\\data'

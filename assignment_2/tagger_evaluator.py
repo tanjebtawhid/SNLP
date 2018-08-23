@@ -1,12 +1,9 @@
 
 class TaggerEvaluator:
     def __init__(self):
-        self.tag_gold_freq ={}
+        self.tag_gold_freq = {}
         self.tag_pred_freq = {}
-
-        self.tag_gold_correct = {}
         self.tag_pred_correct = {}
-
         self.accuracy = None
 
     def get_statistics(self):
@@ -27,8 +24,8 @@ class TaggerEvaluator:
                 string += 'Precision({}): {}/{}\n'.format(tag, 0, self.tag_pred_freq[tag])
 
         for tag in self.tag_gold_freq:
-            if tag in self.tag_gold_correct:
-                string += 'Recall({}): {}/{}\n'.format(tag, self.tag_gold_correct[tag], self.tag_gold_freq[tag])
+            if tag in self.tag_pred_correct:
+                string += 'Recall({}): {}/{}\n'.format(tag, self.tag_pred_correct[tag], self.tag_gold_freq[tag])
             else:
                 string += 'Recall({}): {}/{}\n'.format(tag, 0, self.tag_gold_freq[tag])
 
@@ -60,10 +57,7 @@ class TaggerEvaluator:
                 predicted_tag = prediction[j][1]
                 if target_tag == predicted_tag:
                     correct += 1
-                    self.update(self.tag_gold_correct, target_tag)
                     self.update(self.tag_pred_correct, predicted_tag)
-                else:
-                    pass
 
                 self.update(self.tag_gold_freq, target_tag)
                 self.update(self.tag_pred_freq, predicted_tag)
